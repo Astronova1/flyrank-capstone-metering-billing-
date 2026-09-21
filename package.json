@@ -1,0 +1,25 @@
+{
+  "name": "flyrank-capstone-metering-billing-",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Astronova1/flyrank-capstone-metering-billing-.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Astronova1/flyrank-capstone-metering-billing-/issues"
+  },
+  "homepage": "https://github.com/Astronova1/flyrank-capstone-metering-billing-#readme",
+  "dependencies": {
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
+  }
+}
