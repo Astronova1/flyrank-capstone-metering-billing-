@@ -1,5 +1,8 @@
-const app = require(express)
+const express = require('express')
 const { pool } = require('./db')
+
+const app = express()
+app.use(express.json())
 
 app.get('/health', async (req,res) =>{
     try{
@@ -9,9 +12,9 @@ app.get('/health', async (req,res) =>{
     catch{
         return res.status(503).json({status:'error', db:'Cant reach'})
     }
+}) 
 
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, ()=> {
         console.log(`THE server is running on http://localhost:${PORT}`)
     })
-}) 
