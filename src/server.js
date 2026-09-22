@@ -36,6 +36,7 @@ app.post('/generate', requireTenant, async(req, res) => {
     }
 
     const result = await recordGenerate(req.tenant.id, key.data, body.data);
+        res.set(result.headers || {});
         res.set('Idempotent-Replayed', String(result.replayed));
         res.status(result.status).json(result.body);
     });
