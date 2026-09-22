@@ -1,7 +1,5 @@
-const crypto = require('node:crypto');
 const { pool } = require('./db');
-
-const sha256 = (text) => crypto.createHash('sha256').update(text).digest('hex');
+const { sha256} = require('./hash')
 
 const PLANS = [
   { id: 'free', name: 'Free', apiCallLimit: 1000, aiTokenLimit: 100000 },
