@@ -2,6 +2,7 @@ const express = require('express')
 const { pool } = require('./db')
 const { generateBody, idempotencyKey } = require('./schemas');
 const { requireTenant} = require('./auth')
+const { recordGenerate } = require('./meter');
 const app = express()
 app.use(express.json())
 
@@ -15,7 +16,7 @@ app.get('/health', async (req,res) =>{
     }
 }) 
 
-app.post('/generate', requireTenant, (req, res) => {
+app.post('/generate', requireTenant, async(req, res) => {
   const key = idempotencyKey.safeParse(req.get('Idempotency-Key'));
   if (!key.success) {
     return res.status(400).json({
@@ -34,7 +35,9 @@ app.post('/generate', requireTenant, (req, res) => {
         });
     }
 
-    res.json({ ok: true, key: key.data, usage: body.data }); 
+    const result = await recordGenerate(req.tenant.id, key.data, body.data);
+        res.set('Idempotent-Replayed', String(result.replayed));
+        res.status(result.status).json(result.body);
     });
 
     const PORT = process.env.PORT || 3000;
