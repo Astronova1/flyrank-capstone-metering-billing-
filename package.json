@@ -23,6 +23,7 @@
   "homepage": "https://github.com/Astronova1/flyrank-capstone-metering-billing-#readme",
   "dependencies": {
     "express": "^5.2.1",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
   }
 }
