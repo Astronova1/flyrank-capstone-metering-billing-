@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "seed": "node --env-file=.env src/seed.js"
+    "seed": "node --env-file=.env src/seed.js",
+    "start": "node --env-file=.env src/server.js",
+    "dev": "node --env-file=.env --watch src/server.js"
   },
   "repository": {
     "type": "git",
