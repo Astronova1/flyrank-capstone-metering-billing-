@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --env-file=.env --test --test-concurrency=1",
     "seed": "node --env-file=.env src/seed.js",
     "start": "node --env-file=.env src/server.js",
     "dev": "node --env-file=.env --watch src/server.js"
@@ -25,5 +25,8 @@
     "express": "^5.2.1",
     "pg": "^8.23.0",
     "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "supertest": "^7.3.0"
   }
 }
