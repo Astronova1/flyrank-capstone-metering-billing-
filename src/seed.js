@@ -2,8 +2,8 @@ const { pool } = require('./db');
 const { sha256} = require('./hash')
 
 const PLANS = [
-  { id: 'free', name: 'Free', apiCallLimit: 1000, aiTokenLimit: 100000 },
-  { id: 'pro', name: 'Pro', apiCallLimit: 50000, aiTokenLimit: 5000000 },
+  { id: 'free', name: 'Free', apiCallLimit: 1000, aiTokenLimit: 100000, priceCents: 0, stipePriceid: null },
+  { id: 'pro', name: 'Pro', apiCallLimit: 50000, aiTokenLimit: 5000000, priceCents: 2900, stripePriceid: 'price_mock_pro'},
 ];
 
 // These are demo fixtures for seeding the data
@@ -15,12 +15,13 @@ const TENANTS = [
 
 async function seed() {
   for (const p of PLANS) {
-    await pool.query(
-      `INSERT INTO plans (id, name, api_call_limit, ai_token_limit)
-       VALUES ($1, $2, $3, $4)
+   await pool.query(
+      `INSERT INTO plans (id, name, api_call_limit, ai_token_limit, monthly_price_cents, stripe_price_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO UPDATE
-         SET name = $2, api_call_limit = $3, ai_token_limit = $4`,
-      [p.id, p.name, p.apiCallLimit, p.aiTokenLimit],
+         SET name = $2, api_call_limit = $3, ai_token_limit = $4,
+             monthly_price_cents = $5, stripe_price_id = $6`,
+      [p.id, p.name, p.apiCallLimit, p.aiTokenLimit, p.priceCents, p.stripePriceId],
     );
   }
 
@@ -29,10 +30,12 @@ async function seed() {
       `INSERT INTO tenants (id, name, api_key_hash, plan_id)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (id) DO UPDATE
-         SET name = $2, api_key_hash = $3, plan_id = $4`,
+            SET name = $2, api_key_hash = $3, plan_id = $4, status = 'active', stripe_customer_id = NULL`,
       [t.id, t.name, sha256(t.apiKey), t.planId],
     );
     await pool.query('DELETE FROM usage_events WHERE tenant_id = $1', [t.id]);
+    await pool.query('DELETE FROM subscriptions WHERE tenant_id = $1', [t.id]);
+    await pool.query('DELETE FROM checkout_sessions WHERE tenant_id = $1', [t.id]);
   }
 
   console.log('Seed complete. Demo API keys:');
