@@ -3,6 +3,7 @@ const { pool } = require('./db')
 const { generateBody, idempotencyKey } = require('./schemas');
 const { requireTenant} = require('./auth')
 const { recordGenerate } = require('./meter');
+const { getUsage } = require('./usage');
 const app = express()
 app.use(express.json())
 
@@ -15,6 +16,10 @@ app.get('/health', async (req,res) =>{
         return res.status(503).json({status:'error', db:'Cant reach'})
     }
 }) 
+
+app.get('/usage', requireTenant, async (req, res) => {
+  res.json(await getUsage(req.tenant));
+});
 
 app.post('/generate', requireTenant, async(req, res) => {
   const key = idempotencyKey.safeParse(req.get('Idempotency-Key'));
