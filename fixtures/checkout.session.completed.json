@@ -1,0 +1,17 @@
+{
+  "id": "evt_test_checkout_completed_2",
+  "object": "event",
+  "type": "checkout.session.completed",
+  "created": 1790000000,
+  "data": {
+    "object": {
+      "id": "cs_test_d669f47cc9c5780214ce1241",
+      "object": "checkout_session",
+      "mode": "subscription",
+      "status": "complete",
+      "customer": "cus_test_demo1",
+      "subscription": "sub_test_demo1",
+      "client_reference_id": null
+    }
+  }
+}

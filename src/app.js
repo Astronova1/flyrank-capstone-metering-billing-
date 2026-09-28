@@ -5,7 +5,12 @@ const { requireTenant} = require('./auth')
 const { recordGenerate } = require('./meter');
 const { getUsage } = require('./usage');
 const { createCheckoutSession } = require('./payments');
+const { receiveEvent } = require('./webhooks');
 const app = express()
+app.post('/webhooks/stripe', express.raw({ type: '*/*' }), async (req, res) => {
+  const result = await receiveEvent(req.body, req.get('Stripe-Signature'));
+  res.status(result.status).json(result.body);
+});
 app.use(express.json())
 
 app.get('/health', async (req,res) =>{

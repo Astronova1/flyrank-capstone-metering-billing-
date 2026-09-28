@@ -23,6 +23,7 @@ async function seed() {
              monthly_price_cents = $5, stripe_price_id = $6`,
       [p.id, p.name, p.apiCallLimit, p.aiTokenLimit, p.priceCents, p.stripePriceId],
     );
+      await pool.query('DELETE FROM webhook_events');
   }
 
   for (const t of TENANTS) {

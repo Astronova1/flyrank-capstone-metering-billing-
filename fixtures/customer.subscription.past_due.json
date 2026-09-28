@@ -1,0 +1,3 @@
+{"id":"evt_test_sub_pastdue_1","object":"event","type":"customer.subscription.updated","created":1790000100,
+ "data":{"object":{"id":"sub_test_demo1","object":"subscription","status":"past_due","current_period_end":1793000000,
+ "items":{"data":[{"price":{"id":"price_mock_pro"}}]}}}}
