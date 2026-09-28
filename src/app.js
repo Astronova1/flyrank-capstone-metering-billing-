@@ -4,7 +4,7 @@ const { generateBody, idempotencyKey } = require('./schemas');
 const { requireTenant} = require('./auth')
 const { recordGenerate } = require('./meter');
 const { getUsage } = require('./usage');
-const { createCheckoutSession } = require('./payments');
+const { createCheckoutSession, payMockSession, PROVIDER } = require('./payments');
 const { receiveEvent } = require('./webhooks');
 const app = express()
 app.post('/webhooks/stripe', express.raw({ type: '*/*' }), async (req, res) => {
@@ -66,6 +66,39 @@ app.post('/generate', requireTenant, async(req, res) => {
         res.set(result.headers || {});
         res.set('Idempotent-Replayed', String(result.replayed));
         res.status(result.status).json(result.body);
+});
+
+//mock checkout page only in mock mode because Stripe accounts are not available in Pakistan. 
+if (PROVIDER === 'mock') {
+  app.get('/mock-checkout/:sessionId', (req, res) => {
+    const id = req.params.sessionId.replace(/[^\w-]/g, ''); // only safe characters reach the page
+    res.type('html').send(`<!doctype html>
+<html><head><meta charset="utf-8"><title>Mock Checkout</title></head>
+<body style="font-family:system-ui;max-width:32rem;margin:4rem auto">
+  <h1>Mock Stripe Checkout</h1>
+  <p>Subscribe to <strong>Pro</strong> — $29.00 / month</p>
+  <p>Session: <code>${id}</code></p>
+  <p>Test card 4242 4242 4242 4242 (not collected: no real payment exists here).</p>
+  <button onclick="pay()" style="padding:.75rem 1.5rem;font-size:1rem">Pay</button>
+  <pre id="out"></pre>
+  <script>
+    async function pay() {
+      const res = await fetch('/mock-checkout/${id}/pay', { method: 'POST' });
+      document.getElementById('out').textContent = JSON.stringify(await res.json(), null, 2);
+    }
+  </script>
+</body></html>`);
+  });
+
+  app.post('/mock-checkout/:sessionId/pay', async (req, res) => {
+    const result = await payMockSession(req.params.sessionId);
+    res.status(result.status).json(result.body);
+  });
+}
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: { code: 'internal_error', message: 'Internal server error' } });
 });
 
     module.exports = { app };
