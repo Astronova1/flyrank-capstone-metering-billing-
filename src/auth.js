@@ -12,7 +12,7 @@ async function requireTenant(req, res, next) {
   }
 
   const { rows } = await pool.query(
-    `SELECT t.id, t.name, t.plan_id, p.api_call_limit, p.ai_token_limit
+    `SELECT t.id, t.name, t.plan_id, p.api_call_limit, p.ai_token_limit, p.monthly_price_cents
      FROM tenants t
      JOIN plans p ON p.id = t.plan_id
         WHERE t.api_key_hash = $1`,

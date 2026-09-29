@@ -1,8 +1,9 @@
 const { pool } = require('./db');
 const { nextPeriodStart } = require('./quota');
+const { calculateCost, nanosToUsd, nanosToCents, PRICING } = require('./pricing');
 
 async function getUsage(tenant) {
-  const period = new Date().toISOString().slice(0, 7); 
+  const period = new Date().toISOString().slice(0, 7);
 
   const totals = (await pool.query(
     `SELECT COALESCE(SUM(api_calls), 0)::bigint           AS api_calls,
@@ -14,12 +15,20 @@ async function getUsage(tenant) {
     [tenant.id, period],
   )).rows[0];
 
-  // Cached tokens are already inside input_tokens, so they are not added again.
   const tokensUsed = totals.input_tokens + totals.output_tokens + totals.reasoning_tokens;
+
+  const cost = calculateCost({
+    apiCalls: totals.api_calls,
+    inputTokens: totals.input_tokens,
+    cachedInputTokens: totals.cached_input_tokens,
+    outputTokens: totals.output_tokens,
+    reasoningTokens: totals.reasoning_tokens,
+  });
 
   return {
     tenant_id: tenant.id,
     plan: tenant.plan_id,
+    status: tenant.status,
     period,
     resets_at: nextPeriodStart().toISOString(),
     api_calls: {
@@ -37,6 +46,23 @@ async function getUsage(tenant) {
         output: Number(totals.output_tokens),
         reasoning: Number(totals.reasoning_tokens),
       },
+    },
+    cost: {
+      breakdown_nanos: Object.fromEntries(
+        Object.entries(cost.breakdown).map(([k, v]) => [k, v.toString()]),
+      ),
+      usage_total_nanos: cost.total.toString(),
+      usage_total_usd: nanosToUsd(cost.total),
+      usage_total_cents: Number(nanosToCents(cost.total)),
+      plan_fee_cents: Number(tenant.monthly_price_cents),
+      invoice_total_cents: Number(nanosToCents(cost.total)) + Number(tenant.monthly_price_cents),
+    },
+    pricing_nanos_per_token: {
+      uncached_input: Number(PRICING.UNCACHED_INPUT_TOKEN),
+      cached_input: Number(PRICING.CACHED_INPUT_TOKEN),
+      output: Number(PRICING.OUTPUT_TOKEN),
+      reasoning: Number(PRICING.REASONING_TOKEN),
+      per_api_call: Number(PRICING.API_CALL),
     },
   };
 }

@@ -12,9 +12,8 @@ async function recordGenerate(tenantId, idempotencyKey, usage) {
 
   return withTransaction(async (db) => {
     //here we lock the tenant row util the transaction is commit or rollback
-    //We also read the plan limits here, inside the lock, so they are up to date.
     const tenant = (await db.query(
-      `SELECT t.plan_id, p.api_call_limit, p.ai_token_limit
+      `SELECT t.plan_id, t.status, p.api_call_limit, p.ai_token_limit
        FROM tenants t JOIN plans p ON p.id = t.plan_id
        WHERE t.id = $1
        FOR UPDATE OF t`,
@@ -45,6 +44,7 @@ async function recordGenerate(tenantId, idempotencyKey, usage) {
 
     const rejection = checkQuota({
       planId: tenant.plan_id,
+      paymentStatus: tenant.status,
       used: { apiCalls: used.api_calls, tokens: used.tokens },
       limits: { apiCalls: tenant.api_call_limit, tokens: tenant.ai_token_limit },
       requested: {
