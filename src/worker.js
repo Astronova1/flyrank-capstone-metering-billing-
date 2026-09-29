@@ -107,7 +107,11 @@ async function processNext() {
 
 function start() {
   const timer = setInterval(() => {
-    processNext().catch((err) => console.error('worker error:', err.message));
+    processNext().catch((err) => {const message = err.code || err.message || String(err);
+        if (message !== lastError) {
+          lastError = message;
+          console.error('worker error:', err);
+        }});
   }, POLL_MS);
   timer.unref(); 
   console.log(`webhook worker started (every ${POLL_MS}ms, max ${MAX_ATTEMPTS} attempts)`);
