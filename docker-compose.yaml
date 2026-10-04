@@ -10,8 +10,29 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
+  app:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgres://${DB_USERNAME}:${DB_PASSWORD}@db:5432/${DB_DATABASE}
+      PORT: 3000
+      BASE_URL: http://localhost:3000
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_local_dev_only_not_a_real_secret}
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
 
-  
 volumes:
   pgdata:
   
