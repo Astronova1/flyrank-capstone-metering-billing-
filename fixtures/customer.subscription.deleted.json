@@ -1,3 +1,0 @@
-{"id":"evt_test_sub_deleted_1","object":"event","type":"customer.subscription.deleted","created":1790000200,
- "data":{"object":{"id":"sub_test_demo1","object":"subscription","status":"canceled",
- "items":{"data":[{"price":{"id":"price_mock_pro"}}]}}}}

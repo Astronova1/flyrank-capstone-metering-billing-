@@ -1,0 +1,14 @@
+{
+  "id": "evt_test_unknown_sub",
+  "object": "event",
+  "type": "customer.subscription.updated",
+  "created": 1790000300,
+  "data": {
+    "object": {
+      "id": "sub_does_not_exist",
+      "object": "subscription",
+      "status": "active",
+      "items": { "data": [{ "price": { "id": "price_mock_pro" } }] }
+    }
+  }
+}
