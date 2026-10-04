@@ -11,9 +11,11 @@ function testId(prefix) {
 async function createCheckoutSession(tenant, plan) {
   let sessionId;
   let url;
+  
+  
 
   if (PROVIDER === 'stripe') {
-    // Real Stripe test mode. Untested here (no Stripe account available in Pakistan), kept so the system can be pointed at real Stripe by changing .env only.
+    // Real Stripe test mode. not tested as no Stripe account available in Pakistan, kept so the system can be pointed at real Stripe by changing .env only.
     const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
