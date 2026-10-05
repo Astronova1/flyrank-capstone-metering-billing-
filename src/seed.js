@@ -4,8 +4,10 @@ const { sha256 } = require('./hash');
 
 const PLANS = [
   { id: 'free', name: 'Free', apiCallLimit: 1000, aiTokenLimit: 100000, priceCents: 0, stripePriceId: null },
-  { id: 'pro', name: 'Pro', apiCallLimit: 50000, aiTokenLimit: 5000000, priceCents: 2900,
-    stripePriceId: process.env.STRIPE_PRO_PRICE_ID || 'price_mock_pro' },
+    { id: 'pro', name: 'Pro', apiCallLimit: 50000, aiTokenLimit: 5000000, priceCents: 2900,
+    stripePriceId: process.env.PAYMENT_PROVIDER === 'stripe' && process.env.STRIPE_PRO_PRICE_ID
+      ? process.env.STRIPE_PRO_PRICE_ID
+      : 'price_mock_pro' },
 ];
 
 // These are demo fixtures for seeding the data
@@ -43,6 +45,7 @@ async function seed() {
     await pool.query('DELETE FROM usage_events WHERE tenant_id = $1', [t.id]);
     await pool.query('DELETE FROM subscriptions WHERE tenant_id = $1', [t.id]);
     await pool.query('DELETE FROM checkout_sessions WHERE tenant_id = $1', [t.id]);
+      await pool.query("DELETE FROM tenants WHERE id = '99999999-9999-4999-8999-999999999999'");
   }
 
   console.log(`Seed complete. Pro plan Stripe price: ${PLANS[1].stripePriceId}`);

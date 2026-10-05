@@ -106,6 +106,7 @@ async function processNext() {
 }
 
 function start() {
+  let lastError = null;
   const timer = setInterval(() => {
     processNext().catch((err) => {const message = err.code || err.message || String(err);
         if (message !== lastError) {
