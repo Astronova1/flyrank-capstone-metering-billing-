@@ -1,0 +1,61 @@
+---
+name: usage-metering-billing-engine
+description: >
+  Multitenant usage metering with qota enforcement, AI token cost
+  calculation and subscription sync. Idempotent metering, documented quota
+  boundary, exact integer money math, signatureverified and deduplicated
+  webhooks.
+run: docker compose up -d --build
+seed: docker compose exec app node src/seed.js
+test: npm test
+base_url: http://localhost:3000
+auth:
+  header: "Authorization: Bearer <api_key>"
+  tenants:
+    - name: Acme
+      plan: free
+      api_key: tk_demo_acme_free
+    - name: Globex
+      plan: free
+      api_key: tk_demo_globex_free
+    - name: Initech
+      plan: pro
+      api_key: tk_demo_initech_pro
+endpoints:
+  - method: GET
+    path: /health
+    authentication: false
+    description: Liveness and database check
+  - method: POST
+    path: /generate
+    authentication: true
+    description: Billable action. Idempotency-Key header is required
+  - method: GET
+    path: /usage
+    authentication: true
+    description: Used / limit / remaining and cost for the current month
+  - method: POST
+    path: /billing/checkout
+    authentication: true
+    description: Create a Checkout session to upgrade to Pro
+  - method: GET
+    path: /mock-checkout/:sessionId
+    authentication: false
+    description: Mock Stripe Checkout page (mock mode only)
+  - method: POST
+    path: /webhooks/stripe
+    authentication: false
+    description: Stripe webhook; signature verified, events deduplicated
+notes:
+  payment_provider: >
+    Stripe does not support accounts in Pakistan, so
+    PAYMENT_PROVIDER=mock is the default and no Stripe account is needed to run
+    the probes. The official Stripe SDK signs and verifies every event with
+    Stripe's own HMAC-SHA256 scheme, so the forged signature and replay checks
+    are real. Approved in the FlyRank Q&A. Setting PAYMENT_PROVIDER=stripe with
+    test keys switches to real Stripe, which was verified on 2026-10-04.
+  quota_boundary: >
+    A request is allowed only if used + requested <= limit for both
+    quotas else is rejected whole and nothing is stored. Free over
+    quota returns 402, Pro returns 429 with Retry After, and a tenant whose
+    payment failed returns 402.
