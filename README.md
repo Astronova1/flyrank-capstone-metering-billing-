@@ -44,7 +44,7 @@ Files:
 
 ## How to run it
 
-You only need Docker Desktop with node 20+. 
+You need Docker Desktop with node 20+. 
 
 ```bash
 docker compose up -d --build          
@@ -112,7 +112,7 @@ Money is stored as **nano-dollars** (1 dollar = 1,000,000,000). At that size eve
 a whole number, so nothing has to be rounded on each request. Rounding to cents happens
 once, at the end.
 
-| Item | Price | Nano-dollars per token |
+| Item | Price | Nano dollars per token |
 |---|---|---|
 | Input token (not cached) | $0.30 per 1M | 300 |
 | Cached input token | $0.03 per 1M | 30 |
@@ -231,7 +231,7 @@ stripe listen --events "checkout.session.completed,customer.subscription.updated
 stripe events resend evt_...        # replay test
 ```
 
-Plan changes come from a real test-mode checkout or from the Stripe dashboard.
+Plan changes come from a real test mode checkout or from the Stripe dashboard.
 `stripe trigger` also works, but its events create their own objects inside Stripe, so they
 are verified and stored once and then *not* applied: this service only upgrades a tenant for
 a checkout session it created itself. That is intentional, and it is shown in EVIDENCE.md.
