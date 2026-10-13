@@ -44,7 +44,7 @@ Files:
 
 ## How to run it
 
-You only need Docker Desktop.
+You only need Docker Desktop with node 20+. 
 
 ```bash
 docker compose up -d --build          
@@ -52,9 +52,18 @@ docker compose exec app node src/seed.js   # this creates demo data
 curl http://localhost:3000/health          # check the status of db
 ```
 
-something, copy `.env.example` to `.env`.
-
+Copy `.env.example` to `.env`.
 Demo API keys created by the seed (only for the local demo, not real secrets):
+
+## Mock Replacement for Stripe Account
+
+| Real Stripe | This project (mock mode) |
+|---|---|
+| `stripe listen --forward-to` | `scripts/send-webhook.js` |
+| `stripe trigger` | `scripts/send-subscription-event.js` |
+| Stripe's hosted Checkout page | `GET /mock-checkout/:sessionId` |
+| Stripe's event payloads | `fixtures/*.json` |
+
 
 | Tenant | Plan | API key |
 |---|---|---|
@@ -64,6 +73,8 @@ Demo API keys created by the seed (only for the local demo, not real secrets):
 
 Running the seed again resets the demo data, so the checks below can be repeated.
 
+
+
 ## Plans
 
 | Plan | API calls per month | AI tokens per month | Price |
@@ -71,7 +82,7 @@ Running the seed again resets the demo data, so the checks below can be repeated
 | Free | 1,000 | 100,000 | $0 |
 | Pro | 50,000 | 5,000,000 | $29.00 |
 
-A monthly quotas reset on the 1st at 00:00 UTC.
+A month means calender month in UTC. Quotas reset on the 1st at 00:00 UTC.
 One `POST /generate` counts as 1 API call plus the tokens it reports.
 
 ## The limit rule
@@ -192,17 +203,39 @@ Events handled: `checkout.session.completed` (go to Pro),
 `customer.subscription.updated` (sync plan and `past_due`),
 `customer.subscription.deleted` (back to Free).
 
-Sending events without a Stripe account:
+### Producing webhook events
+
+**Mock mode (default — no Stripe account needed).** These replace the Stripe CLI:
 
 ```bash
-# a subscription event built from the subscription currently in the database
-node --env-file=.env scripts/send-subscription-event.js past_due --replay
-node --env-file=.env scripts/send-subscription-event.js past_due --forge
-node --env-file=.env scripts/send-subscription-event.js canceled
-
-# a fixture file
+# deliver a fixture event (replaces `stripe listen` + a trigger)
 node --env-file=.env scripts/send-webhook.js fixtures/checkout.session.completed.json
+
+# subscription events built from the subscription currently in the database
+node --env-file=.env scripts/send-subscription-event.js past_due            # payment failed
+node --env-file=.env scripts/send-subscription-event.js canceled            # back to Free
+node --env-file=.env scripts/send-subscription-event.js past_due --replay   # same event twice -> duplicate ignored
+node --env-file=.env scripts/send-subscription-event.js past_due --forge    # bad signature -> 400
 ```
+
+A full upgrade is done through the mock checkout page: `POST /billing/checkout`, open the
+`checkout_url`, click **Pay**. The page signs a `checkout.session.completed` event with the
+official Stripe SDK and delivers it to `/webhooks/stripe`, so signature verification and
+de-duplication run exactly as they would with real Stripe.
+
+**Real Stripe mode (`PAYMENT_PROVIDER=stripe`, optional).** The CLI is used instead:
+
+```bash
+stripe listen --events "checkout.session.completed,customer.subscription.updated,customer.subscription.deleted" \
+  --forward-to http://localhost:3000/webhooks/stripe
+stripe events resend evt_...        # replay test
+```
+
+Plan changes come from a real test-mode checkout or from the Stripe dashboard.
+`stripe trigger` also works, but its events create their own objects inside Stripe, so they
+are verified and stored once and then *not* applied: this service only upgrades a tenant for
+a checkout session it created itself. That is intentional, and it is shown in EVIDENCE.md.
+
 
 ## Tests
 
@@ -220,9 +253,9 @@ isolation, and the pricing rules with numbers worked out by hand. The output is 
 ## Limitations
 
 - **Stripe runs in mock mode by default.** Stripe does not support accounts in Pakistan, so
-  I cannot get test keys of my own. What is real: the official Stripe SDK signs and checks
+  I cannot register a buisness and use stripe normally. What is real: the official Stripe SDK signs and checks
    every event with the same HMAC-SHA256 scheme Stripe uses, so the
-s  forged signature and replay checks are genuine. What is faked: Stripe's hosted checkout
+  forged signature and replay checks are genuine. What is faked: Stripe's hosted checkout
   page and Stripe's servers, replaced by a local page and a local signer. Setting
   `PAYMENT_PROVIDER=stripe` with real test keys uses real Stripe instead, which I tested on
   2026-10-04 using a sandbox account . Mock stays the default so this project
