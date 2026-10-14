@@ -53,6 +53,7 @@ curl http://localhost:3000/health          # check the status of db
 ```
 
 Copy `.env.example` to `.env`.
+Select only one , mock or stripe based on the required mode
 Demo API keys created by the seed (only for the local demo, not real secrets):
 
 ## Mock Replacement for Stripe Account
@@ -240,6 +241,11 @@ a checkout session it created itself. That is intentional, and it is shown in EV
 ## Tests
 
 With the app running:
+
+`Install supertest` or else one test will fail
+```bash
+npm install --save-dev supertest
+```
 
 ```bash
 npm install
