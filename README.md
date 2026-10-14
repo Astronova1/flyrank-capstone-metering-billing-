@@ -44,27 +44,19 @@ Files:
 
 ## How to run it
 
-You need Docker Desktop with node 20+. 
+Docker Desktop is all you need to run the service. Node 20+ is only needed if you want to
+run `npm test` or the webhook scripts.
 
 ```bash
-docker compose up -d --build          
-docker compose exec app node src/seed.js   # this creates demo data
-curl http://localhost:3000/health          # check the status of db
+docker compose up -d --build
+docker compose exec app node src/seed.js   # creates demo data
+curl http://localhost:3000/health          # checks the app and the database
 ```
 
-Copy `.env.example` to `.env`.
-Select only one , mock or stripe based on the required mode
-Demo API keys created by the seed (only for the local demo, not real secrets):
+A `.env` file is optional — Docker Compose has safe local defaults. To change anything, copy
+`.env.example` to `.env` and pick **one** mode: `PAYMENT_PROVIDER=mock` (default) or `stripe`.
 
-## Mock Replacement for Stripe Account
-
-| Real Stripe | This project (mock mode) |
-|---|---|
-| `stripe listen --forward-to` | `scripts/send-webhook.js` |
-| `stripe trigger` | `scripts/send-subscription-event.js` |
-| Stripe's hosted Checkout page | `GET /mock-checkout/:sessionId` |
-| Stripe's event payloads | `fixtures/*.json` |
-
+Demo API keys created by the seed (local demo only, not real secrets):
 
 | Tenant | Plan | API key |
 |---|---|---|
@@ -74,6 +66,133 @@ Demo API keys created by the seed (only for the local demo, not real secrets):
 
 Running the seed again resets the demo data, so the checks below can be repeated.
 
+## Verifying the acceptance probes
+
+Run these in order from a clean start:
+
+```bash
+docker compose down -v
+docker compose up -d --build
+docker compose exec app node src/seed.js
+```
+
+### Probe 1 — Idempotency
+
+Three calls: the same key twice, then the same key with a different body.
+
+```bash
+curl -i -X POST http://localhost:3000/generate \
+  -H "Authorization: Bearer tk_demo_acme_free" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-001" \
+  -d '{"input_tokens":10000,"cached_input_tokens":4000,"output_tokens":2000,"reasoning_tokens":1500}'
+
+# exactly the same command again
+# then the same key with a different body:
+curl -i -X POST http://localhost:3000/generate \
+  -H "Authorization: Bearer tk_demo_acme_free" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-001" \
+  -d '{"input_tokens":5,"output_tokens":5}'
+```
+
+Expected: `201` with `Idempotent-Replayed: false`, then `201` with `Idempotent-Replayed: true`
+and a byte identical body, then `409 idempotency_key_reused`. Only one row is stored:
+
+```bash
+docker compose exec db sh -c 'psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT idempotency_key, count(*) FROM usage_events GROUP BY 1"'
+```
+
+### Probe 2 — Quota boundary
+
+Fill Globex (Free) to 999 calls, then make call 1000 and 1001.
+
+```bash
+docker compose exec db sh -c 'psql -U $POSTGRES_USER -d $POSTGRES_DB -c "INSERT INTO usage_events (id,tenant_id,period,idempotency_key,request_hash,api_calls,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,response_body) SELECT gen_random_uuid(), '\''22222222-2222-4222-8222-222222222222'\'', to_char(now() at time zone '\''utc'\'', '\''YYYY-MM'\''), '\''fill-'\''||g, '\''x'\'', 1,0,0,0,0, '\''{}'\'' FROM generate_series(1,999) g"'
+
+curl -i -X POST http://localhost:3000/generate -H "Authorization: Bearer tk_demo_globex_free" \
+  -H "Content-Type: application/json" -H "Idempotency-Key: c1000" -d '{"input_tokens":1,"output_tokens":0}'
+
+curl -i -X POST http://localhost:3000/generate -H "Authorization: Bearer tk_demo_globex_free" \
+  -H "Content-Type: application/json" -H "Idempotency-Key: c1001" -d '{"input_tokens":1,"output_tokens":0}'
+```
+
+Expected: call 1000 → `201` (999 + 1 = 1000 = limit, so allowed), call 1001 → `402 upgrade_required`.
+Replaying `c1000` still returns `201` with `Idempotent-Replayed: true` even though the quota is full.
+A Pro tenant over its limit gets `429` with a `Retry-After` header instead of `402`.
+
+### Probe 3 — Checkout, Free → Pro
+
+```bash
+curl -s -X POST http://localhost:3000/billing/checkout -H "Authorization: Bearer tk_demo_acme_free"
+# copy the session_id from the response, then:
+curl -s -X POST http://localhost:3000/mock-checkout/<session_id>/pay
+curl -s http://localhost:3000/usage -H "Authorization: Bearer tk_demo_acme_free"
+```
+
+Expected: `"paid": true`, then `/usage` shows `"plan": "pro"` with limits 50000 and 5000000.
+
+### Probe 4 — Webhook security and plan sync
+
+```bash
+node --env-file=.env scripts/send-subscription-event.js past_due --replay
+node --env-file=.env scripts/send-subscription-event.js past_due --forge
+```
+
+Expected: the signed event → `200 {"received":true}`, the identical replay → `{"duplicate":true}`,
+the forged signature → `400 invalid_signature` and nothing stored. The tenant is now `pro / past_due`,
+so a billable call is refused:
+
+```bash
+curl -i -X POST http://localhost:3000/generate -H "Authorization: Bearer tk_demo_acme_free" \
+  -H "Content-Type: application/json" -H "Idempotency-Key: pd1" -d '{"input_tokens":1,"output_tokens":0}'
+```
+
+Expected: `402` with `"reason": "payment_past_due"`. Then cancel and the tenant drops back to Free:
+
+```bash
+node --env-file=.env scripts/send-subscription-event.js canceled
+docker compose exec db sh -c 'psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT name, plan_id, status FROM tenants ORDER BY name"'
+```
+
+### Probe 5 — Pricing
+
+After Probe 1, read the usage for Acme:
+
+```bash
+curl -s http://localhost:3000/usage -H "Authorization: Bearer tk_demo_acme_free"
+```
+
+Expected: `usage_total_nanos` = `11670000`, `usage_total_usd` = `"0.011670000"`,
+and `ai_tokens.used` = `13500` (cached tokens counted once, not twice).
+
+### Probe 6 — Background job: retry and alert
+
+Set `WORKER_MAX_ATTEMPTS=2` in `.env` and run `docker compose up -d`, then send an event the
+system cannot apply:
+
+```bash
+node --env-file=.env scripts/send-webhook.js fixtures/unknown.subscription.json
+sleep 12
+docker compose exec db sh -c 'psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT id, status, attempts, left(last_error, 50) FROM webhook_events ORDER BY received_at DESC LIMIT 3"'
+docker compose logs app --tail 20
+```
+
+Expected: the row ends as `failed` with `attempts = 2`, and the app log contains an `ALERT` line.
+Put `WORKER_MAX_ATTEMPTS=5` back afterwards.
+
+> **Windows PowerShell:** use `curl.exe` instead of `curl`, and put the JSON body in a file
+> (`'{"input_tokens":1,"output_tokens":0}' | Out-File -Encoding ascii small.json`) and pass
+> `--data "@small.json"`, because PowerShell handles single quotes differently.
+
+## Mock replacement for a Stripe account
+
+| Real Stripe | This project (mock mode) |
+|---|---|
+| `stripe listen --forward-to` | `scripts/send-webhook.js` |
+| `stripe trigger` | `scripts/send-subscription-event.js` |
+| Stripe's hosted Checkout page | `GET /mock-checkout/:sessionId` |
+| Stripe's event payloads | `fixtures/*.json` |
 
 
 ## Plans
@@ -232,20 +351,9 @@ stripe listen --events "checkout.session.completed,customer.subscription.updated
 stripe events resend evt_...        # replay test
 ```
 
-Plan changes come from a real test mode checkout or from the Stripe dashboard.
-`stripe trigger` also works, but its events create their own objects inside Stripe, so they
-are verified and stored once and then *not* applied: this service only upgrades a tenant for
-a checkout session it created itself. That is intentional, and it is shown in EVIDENCE.md.
-
-
 ## Tests
 
 With the app running:
-
-`Install supertest` or else one test will fail
-```bash
-npm install --save-dev supertest
-```
 
 ```bash
 npm install
@@ -258,9 +366,9 @@ isolation, and the pricing rules with numbers worked out by hand. The output is 
 
 ## Limitations
 
-- **Stripe runs in mock mode by default.** Stripe does not support accounts in Pakistan, so
-  I cannot register a buisness and use stripe normally. What is real: the official Stripe SDK signs and checks
-   every event with the same HMAC-SHA256 scheme Stripe uses, so the
+- **Stripe runs in mock mode by default.** Stripe does not support accounts in Pakistan,
+  use stripe normally. What is real: the official Stripe SDK signs and checks
+  every event with the same HMAC-SHA256 scheme Stripe uses, so the
   forged signature and replay checks are genuine. What is faked: Stripe's hosted checkout
   page and Stripe's servers, replaced by a local page and a local signer. Setting
   `PAYMENT_PROVIDER=stripe` with real test keys uses real Stripe instead, which I tested on
