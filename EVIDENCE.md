@@ -248,9 +248,11 @@ PS C:\Users\Dark\source\repos\flyrank-capstone-metering-billing-> $s | ConvertTo
     "plan":  "pro",
     "price_cents":  2900
 }
+```
 ![checkout page](image-5.png)
 ![after pay](image-6.png)
 
+```bash
 PS C:\Users\Dark\source\repos\flyrank-capstone-metering-billing-> Invoke-RestMethod -Uri http://localhost:3000/usage -Headers $acme
 
 
@@ -355,7 +357,6 @@ PS C:\Users\Dark\source\repos\flyrank-capstone-metering-billing-> Invoke-RestMet
 tenant_id                            plan calls
 ---------                            ---- -----
 33333333-3333-4333-8333-333333333333 pro  50000
-```bash
 ```
 
 ### Box 11
