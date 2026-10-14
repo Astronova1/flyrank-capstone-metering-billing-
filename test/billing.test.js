@@ -70,6 +70,15 @@ test('invalid input: 400, nothing stored', async () => {
   assert.equal(await countEvents(), 2);
 });
 
+test('malformed JSON: 400, not 500', async () => {
+  const res = await request(app).post('/generate').set(auth).set('Idempotency-Key', 'k4')
+    .set('Content-Type', 'application/json').send('{bad json');
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.error.code, 'invalid_json');
+  assert.equal(await countEvents(), 2);
+});
+
 test('quota boundary: call 1000 passes, call 1001 gets 402', async () => {
   // Jump to 999 calls by inserting rows directly
   await pool.query('DELETE FROM usage_events WHERE tenant_id = $1', [TENANT_ID]);
